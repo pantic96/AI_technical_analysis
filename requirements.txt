@@ -5,3 +5,4 @@ plotly
 # ollama
 kaleido
 openai
+httpx
