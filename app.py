@@ -10,6 +10,7 @@ import ollama
 import tempfile
 import base64
 import os
+import httpx
 
 # Set up Streamlit app
 st.set_page_config(layout="wide")
@@ -76,38 +77,52 @@ if "stock_data" in st.session_state:
     fig.update_layout(xaxis_rangeslider_visible=False)
     st.plotly_chart(fig)
 
-    # Analyze chart with LLaMA 3.2 Vision
-    st.subheader("AI-Powered Analysis")
-    if st.button("Run AI Analysis"):
-        with st.spinner("Analyzing the chart, please wait..."):
-            # Save chart as a temporary image
-            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
-                fig.write_image(tmpfile.name)
-                tmpfile_path = tmpfile.name
+   # AI Analysis with Llama API
+st.subheader("AI-Powered Analysis")
+if st.button("Run AI Analysis"):
+    with st.spinner("Analyzing the chart, please wait..."):
+        # Save chart as a temporary image
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
+            fig.write_image(tmpfile.name)
+            tmpfile_path = tmpfile.name
 
-            # Read image and encode to Base64
-            with open(tmpfile_path, "rb") as image_file:
-                image_data = base64.b64encode(image_file.read()).decode('utf-8')
+        # Read image and encode to Base64 (optional, depending on API requirements)
+        with open(tmpfile_path, "rb") as image_file:
+            image_data = base64.b64encode(image_file.read()).decode("utf-8")
 
-            # Prepare AI analysis request
-            messages = [{
-                'role': 'user',
-                'content': """You are a Stock Trader specializing in Technical Analysis at a top financial institution.
-                            Analyze the stock chart's technical indicators and provide a buy/hold/sell recommendation.
-                            Base your recommendation only on the candlestick chart and the displayed technical indicators.
-                            First, provide the recommendation, then, provide your detailed reasoning.
+        # Prepare payload for the Llama API
+        payload = {
+            "model": "llama-2-13b",  # Replace with your specific Llama model
+            "inputs": {
+                "prompt": """
+                You are a Stock Trader specializing in Technical Analysis at a top financial institution.
+                Analyze the stock chart's technical indicators and provide a buy/hold/sell recommendation.
+                Base your recommendation only on the candlestick chart and the displayed technical indicators.
+                First, provide the recommendation, then, provide your detailed reasoning.
                 """,
-                'images': [image_data]
-            }]
-            response = ollama.chat(model='llama3.2-vision', messages=messages)
+                "image": image_data,  # Include image if the API supports it
+            }
+        }
 
-            # Display AI analysis result
+        headers = {
+            "Authorization": f"Bearer {st.secrets['llama']['api_key']}",  # Get the API key from Streamlit secrets
+            "Content-Type": "application/json"
+        }
+
+        try:
+            # Send request to Llama API
+            response = httpx.post("https://your-llama-api-endpoint.com/analyze", json=payload, headers=headers)
+            response.raise_for_status()  # Raise error for non-2xx status codes
+            result = response.json()
+
+            # Display AI analysis results
             st.write("**AI Analysis Results:**")
-            st.write(response["message"]["content"])
+            st.write(result.get("outputs", {}).get("response", "No response provided."))
 
-            # Clean up temporary file
-            os.remove(tmpfile_path)
+        except httpx.RequestError as e:
+            st.error(f"An error occurred while connecting to the Llama API: {e}")
+        except httpx.HTTPStatusError as e:
+            st.error(f"Llama API returned an error: {e.response.text}")
 
-
-
-            
+        # Clean up temporary file
+        os.remove(tmpfile_path)
